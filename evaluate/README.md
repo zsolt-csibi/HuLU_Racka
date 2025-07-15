@@ -41,7 +41,7 @@ hulu-evaluate <command> [<args>]
 ## Train a Model: Train on HuLU tasks using the train command
 
 ```bash
-hulu-evaluate --model_name <MODEL_NAME> --output_dir <OUTPUT_DIR> --train_epochs 6 --train_batch 8
+hulu-evaluate --model-name <MODEL_NAME> --output-dir <OUTPUT_DIR> --train-epochs 6 --train-batch 8
 ```
 
 You can submit your results on the hulu.nytud.hu webpage. The results are created by default in the "HuluFinetune" directory.
@@ -105,8 +105,8 @@ HuLU (Hungarian Language Understanding Benchmark Kit) was created on the basis o
 
 ## Submitting the Results to the HuLU Leaderboard
 
-The official [HuLU page](https://hulu.nytud.hu/tasks) offers an opportunity to validate your results from the training procedure. 
-The path selected with the `--output-path` or it will default to the same folder the process is ran. 
+The official [HuLU page](https://hulu.nytud.hu/tasks) offers an opportunity to validate your results from the training procedure.
+The path selected with the `--output-path` or it will default to the same folder the process is ran.
 The created folder is named `finetune_results` and will contain the predictions of the model for the given task e.g.: `cola_predicted_labels.json`. To submit your results you will need this file.
 
 Navigate to the webpage https://hulu.nytud.hu/. Sign up at the top right corner - use google authentication. After successful authorization select `Submission` fill the form and upload the newly created predictions for the given task - one at a time.
