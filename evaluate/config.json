@@ -1,0 +1,19 @@
+{
+    "model_name": "Qwen/Qwen3-4B",
+    "tokenizer_name": "Qwen/Qwen3-4B",
+    "train_maxlen": 1024,
+    "train_batch": 2,
+    "local_model": false,
+    "model_path": "/project/c_racka1/racka_komondor/runs/legelo_2_week2_resume/step_287999",
+    "eval_style": "standard",
+    "precision": "fp16",
+    "train_epochs": 2,
+    "tasks": [
+        "cola"
+    ],
+    "gradient_accumulation_steps": 16,
+    "use_lora": true,
+    "lora_r": 64,
+    "lora_alpha": 128,
+    "lora_dropout": 0.1
+}

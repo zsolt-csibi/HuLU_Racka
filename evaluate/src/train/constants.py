@@ -72,3 +72,12 @@ TOKENIZER_PARAMETERS = {
     "cb": {"truncation": True, "padding": "max_length", "max_length": 512},
     "copa": {"truncation": True, "padding": "max_length", "max_length": 256},
 }
+
+CONVERSIONS = {
+    "cola": [{"from": "1", "to": "helyes"}, {"from": "0", "to": "helytelen"}],
+    "sst": [{"from": "positive", "to": "pozitív"}, {"from": "negative", "to": "negatív"}, {"from": "neutral", "to": "semleges"}],
+    "wnli": [{"from": "1", "to": "igen"}, {"from": "0", "to": "nem"}],
+    "rte": [{"from": "1", "to": "igen"}, {"from": "0", "to": "nem"}],
+    "cb": [{"from": "entailment", "to": "következik"}, {"from": "contradiction", "to": "ellentétes"}, {"from": "neutral", "to": "semleges"}],
+    "copa": [{"from": "1", "to": "első"}, {"from": "2", "to": "második"}],
+}

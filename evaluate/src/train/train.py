@@ -10,20 +10,127 @@ from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
     get_linear_schedule_with_warmup,
+    PreTrainedTokenizerFast,
 )
+
 from transformers.modeling_outputs import (
     MultipleChoiceModelOutput,
     SequenceClassifierOutput,
 )
 
-from train.arguments import Arguments
-from train.constants import CB_LABELS, CONJUNCTIONS, SST_LABELS
-from train.helper import write_submission
-from train.lora_helper import set_lora
+from safetensors.torch import load_file
+from peft import PeftModel
+
+from .arguments import Arguments
+from .constants import CB_LABELS, CONJUNCTIONS, SST_LABELS
+from .helper import write_submission
+from .lora_helper import set_lora
 
 accuracy_metric = evaluate.load("accuracy")
 mcc_metric = evaluate.load("matthews_correlation")
 f1_metric = evaluate.load("f1")
+
+
+def load_custom_embeddings_qwen(model,tokenizer, embed_path, lm_head_path):
+    """Load custom embedding layers"""
+    # Load modified embed_token
+    embed_tokens_state_dict = load_file(embed_path)
+    print(embed_tokens_state_dict.keys())
+    # embed_tokens_state_dict = {"weight": embed_tokens_state_dict["model.embed_tokens.weight"]}
+    embed_tokens = torch.nn.Embedding(151936, 2560, tokenizer.pad_token_id, dtype=torch.bfloat16)
+    print(embed_tokens_state_dict["weight"].shape)
+    print(embed_tokens_state_dict["weight"].dtype)
+
+    embed_tokens.load_state_dict(embed_tokens_state_dict)
+    model.embed_tokens = embed_tokens.bfloat16().to('cuda')
+
+    torch.cuda.empty_cache()
+    
+    return model
+
+def load_base_model(base_model_id, task, eval_style, model_kwargs={}):
+    if task == "copa":
+        model = AutoForMultipleChoice(base_model_id)
+    elif eval_style == "standard":
+        model = AutoModelForSequenceClassification.from_pretrained(base_model_id,
+            attn_implementation="sdpa",
+            device_map="auto", **model_kwargs
+        )
+    else:
+        model = AutoModelForCausalLM.from_pretrained(
+            base_model_id,
+            attn_implementation="sdpa",
+             device_map="auto"
+    )
+
+    print(f"Model loaded: {base_model_id}")
+
+    return model
+
+def load_local_model(model_id, model_path, task, eval_style, tokenizer, apply_quantization=False, model_kwargs={}):
+    """Load and configure the base model"""
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    model = load_base_model(model_id, task, eval_style, model_kwargs)
+
+    embed_path = model_path
+
+    if task == "copa":
+        model.to(device)
+        model.model.gradient_checkpointing_enable({"use_reentrant":False})
+        model.model = load_custom_embeddings_qwen(model.model, tokenizer, f"{embed_path}/embed_tokens.safetensors", lm_head_path=embed_path)
+        print(f"Custom embeddings loaded: {embed_path} for task {task}")
+
+    # Apply PEFT adapters
+        model.model = PeftModel.from_pretrained(model.model, model_path)
+
+        print(f"PEFT adapters loaded from: {model_path} for task {task}")
+
+        model.model = model.model.merge_and_unload()
+    else:
+        if eval_style == "standard":
+            model.to(device)
+            model.gradient_checkpointing_enable({"use_reentrant":False})
+            model = load_custom_embeddings_qwen(model, tokenizer, f"{embed_path}/embed_tokens.safetensors", lm_head_path=embed_path)
+            print(f"Custom embeddings loaded: {embed_path} for task {task}")
+
+    # Apply PEFT adapters
+            model.base_model = PeftModel.from_pretrained(model.base_model, model_path)
+
+            print(f"PEFT adapters loaded from: {model_path} for task {task}")
+
+            model.base_model = model.base_model.merge_and_unload()
+        else:
+            model.to(device)
+            model.gradient_checkpointing_enable({"use_reentrant":False})
+            model = load_custom_embeddings_qwen(model, tokenizer, f"{embed_path}/embed_tokens.safetensors", lm_head_path=embed_path)
+            print(f"Custom embeddings loaded: {embed_path} for task {task}")
+
+    # Apply PEFT adapters
+            model = PeftModel.from_pretrained(model, model_path)
+            print(f"PEFT adapters loaded from: {model_path} for task {task}")
+            model = model.merge_and_unload()
+
+    return model
+
+def load_local_tokenizer(tokenizer_path, max_length=4096):
+    """Load and configure tokenizer"""
+    print(f"Loading tokenizer from {tokenizer_path}")
+    tokenizer = PreTrainedTokenizerFast(tokenizer_file=tokenizer_path, trust_remote_code=True)
+
+    # Add all special tokens consistently with tokenize_test.py
+    special_tokens = {
+        "bos_token": "<|endoftext|>",
+        "eos_token" : "<|endoftext|>",
+        "pad_token" : "<|endoftext|>",
+    }
+    tokenizer.add_special_tokens(special_tokens)
+
+    print(f"Tokenizer pad token ID: {tokenizer.pad_token_id}")
+    print(f"Tokenizer eos token ID: {tokenizer.eos_token_id}")
+    tokenizer.model_max_length = max_length
+    return tokenizer
 
 
 def compute_metrics(logits, labels):
@@ -44,7 +151,10 @@ def compute_metrics(logits, labels):
 class AutoForMultipleChoice(nn.Module):
     def __init__(self, model_name):
         super().__init__()
-        self.model = AutoModel.from_pretrained(model_name)
+        self.model = AutoModel.from_pretrained(model_name, base_model_id,
+            attn_implementation="sdpa",
+            device_map="auto"
+        )
 
         self.classifier = nn.Linear(self.model.config.hidden_size, 1)
 
@@ -79,9 +189,22 @@ class TrainPipeline:
         )
         self.current_task = current_task
         self.hulu_args = hulu_args
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            tokenizer_name, clean_up_tokenization_spaces=True
-        )
+
+        if self.hulu_args.local_model:
+            self.tokenizer = load_local_tokenizer(self.hulu_args.tokenizer_name, self.hulu_args.train_maxlen)
+            print(f"Local tokenizer loaded from {self.hulu_args.tokenizer_name}")
+        else:
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                tokenizer_name, clean_up_tokenization_spaces=True
+            )
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.add_special_tokens({"pad_token": "<|endoftext|>"})
+
+            # self.tokenizer.add_special_tokens(special_tokens)
+            print(f"Tokenizer loaded from {tokenizer_name}")
+
+        print("Tokenizer special tokens:", self.tokenizer.special_tokens_map)
+
         self.train_loader, self.dev_loader, self.test_loader = None, None, None
 
     def collate_fn(self, batch):
@@ -139,12 +262,17 @@ class TrainPipeline:
             if self.current_task in ["sst", "cb"]
             else {"num_labels": 2}
         )
-        if self.current_task == "copa":
-            model = AutoForMultipleChoice(self.hulu_args.model_name)
+        if self.hulu_args.local_model:
+            model = load_local_model(self.hulu_args.model_name, self.hulu_args.model_path, self.current_task, 
+                self.hulu_args.eval_style, self.tokenizer, apply_quantization=False)
         else:
-            model = AutoModelForSequenceClassification.from_pretrained(
-                self.hulu_args.model_name, **model_kwargs
-            )
+            if self.current_task == "copa":
+                model = AutoForMultipleChoice(self.hulu_args.model_name)
+            else:
+                model = AutoModelForSequenceClassification.from_pretrained(
+                    self.hulu_args.model_name, **model_kwargs
+                )
+        model.config.pad_token_id = self.tokenizer.pad_token_id
 
         if self.hulu_args.use_lora:
             model = set_lora(self.hulu_args, sequente_classification=False, model=model)

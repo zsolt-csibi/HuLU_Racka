@@ -2,8 +2,9 @@ import torch
 from datasets import load_dataset
 from transformers import AutoTokenizer
 
-from train.arguments import Arguments
-from train.constants import (
+from .train import load_local_tokenizer
+from .arguments import Arguments
+from .constants import (
     CONJUNCTIONS,
     HULU_DATASETS,
     IRRELEVANT_COLUMNS,
@@ -25,15 +26,36 @@ class PreprocessPipeline:
         dataset = load_dataset(dataset_name)
         self.tokenizer, self.tokenizer_params = self.load_tokenizer(arguments, task)
 
+
+
         self.preprocess_fn = self.get_preprocess_fn(
             task, self.tokenizer, self.tokenizer_params
         )
+        
+        if arguments.eval_style == "prompting":
+            dataset = dataset.map(lambda batch: self._map_labels_for_prompting(batch, task), batched=True)
 
         remove_columns = IRRELEVANT_COLUMNS.get(task)
 
         dataset = dataset.map(self.preprocess_fn, remove_columns=remove_columns)
 
         return dataset
+    
+    def _map_labels_for_prompting(batch, task):
+        conversions = CONVERSIONS.get(task, [])
+        if not conversions:
+            return batch  # nothing to change
+
+        # build a mapping for quick lookup
+        conversion_dict = {c["from"]: c["to"] for c in conversions}
+
+        # convert labels
+        batch["label"] = [
+            conversion_dict.get(label, label) for label in batch["label"]
+        ]
+
+        return batch
+        
 
     def get_preprocess_fn(self, task, tokenizer, tokenizer_params):
         def preprocess_example(
@@ -82,9 +104,14 @@ class PreprocessPipeline:
         return preprocess_row
 
     def load_tokenizer(self, arguments: Arguments, task: str):
-        tokenizer = AutoTokenizer.from_pretrained(
-            arguments.tokenizer_name, clean_up_tokenization_spaces=True
-        )
+        if arguments.local_model:
+            tokenizer = load_local_tokenizer(arguments.tokenizer_name, arguments.train_maxlen)
+            print(f"Loaded local tokenizer from {arguments.model_name}")
+        else:
+            tokenizer = AutoTokenizer.from_pretrained(
+                arguments.tokenizer_name, clean_up_tokenization_spaces=True
+            )
+            print(f"Downloaded tokenizer {arguments.tokenizer_name} from Hugging Face")
 
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token

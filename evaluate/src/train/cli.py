@@ -1,7 +1,7 @@
 import argparse
 
-from train.arguments import Arguments
-from train.main import benchmark
+from .arguments import Arguments
+from .main import benchmark
 
 __doc__ = """
 Starting point for fine-tuning language models on HuLU benchmarks.
@@ -15,7 +15,7 @@ def cli() -> None:
     parser.add_argument(
         "--output-dir", type=str, default="finetune_results", help="Output directory"
     )
-    parser.add_argument("--model-name", type=str, required=True, help="Model name")
+    parser.add_argument("--model-name", type=str, help="Model name")
     parser.add_argument(
         "--tokenizer-name", type=str, help="Tokenizer name (defaults to model_name)"
     )
@@ -64,8 +64,34 @@ def cli() -> None:
         default=1,
         help="Number of gradient accumulation steps",
     )
+    
+    parser.add_argument(
+        "--eval-style",
+        type=str,
+        default="standard",
+        choices=["standard", "prompting"],
+        help="Evaluation style: 'standard' or 'prompting'",
+    )
+    parser.add_argument(
+        "--local-model",
+        action="store_true",
+        help="Use a local model instead of downloading from Hugging Face",
+        default=False,
+    )
+    parser.add_argument(
+        "--custom-embeddings-path",
+        type=str,
+        default=None,
+        help="Path to custom embeddings for specific tasks",
+    )
+    parser.add_argument(
+       "--model_path",
+        type=str,
+        help="Path to the directory containing the LoRA adapters",
+    )
 
     args = parser.parse_args()
+    # print(f"Arguments: {args}")
 
     if args.config_file:
         arguments = Arguments.from_json(args.config_file)
@@ -88,6 +114,11 @@ def cli() -> None:
             use_fsdp=args.use_fsdp,
             tasks=args.tasks,
         )
+
+    print("arguments:", arguments)
+    
+    # print(f"Training arguments: {arguments}")
+    print("Starting training...")
 
     benchmark(arguments)
 

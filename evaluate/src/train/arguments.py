@@ -7,6 +7,7 @@ from pydantic import BaseModel, field_validator, model_validator
 class Arguments(BaseModel):
     output_dir: str = "HuluFinetune"
     model_name: str
+    model_path: str
     tokenizer_name: Optional[str] = None
     train_epochs: int = 6
     train_batch: int = 8
@@ -16,6 +17,8 @@ class Arguments(BaseModel):
     train_seed: int = 42
     precision: str = "fp32"
     use_lora: bool = False
+    local_model: bool = False
+    eval_style: str = "standard" # 'standard' or 'prompting'
     lora_r: int = 8
     lora_alpha: int = 16
     lora_dropout: float = 0.1

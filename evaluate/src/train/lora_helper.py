@@ -1,6 +1,6 @@
 from peft import LoraConfig, TaskType, get_peft_model
 
-from train.arguments import Arguments
+from .arguments import Arguments
 
 
 def print_trainable_parameters(model):

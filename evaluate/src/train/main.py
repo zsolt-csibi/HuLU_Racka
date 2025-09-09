@@ -3,10 +3,10 @@ import logging
 import torch
 import torch.multiprocessing as mp
 
-from train.arguments import Arguments
-from train.fsdp import FSdpPipeline, run_worker
-from train.preprocess import PreprocessPipeline
-from train.train import TrainPipeline
+from .arguments import Arguments
+from .fsdp import FSdpPipeline, run_worker
+from .preprocess import PreprocessPipeline
+from .train import TrainPipeline
 
 logging.basicConfig(
     level=logging.INFO,

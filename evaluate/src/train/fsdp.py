@@ -9,8 +9,8 @@ from torch.optim import AdamW
 from tqdm import tqdm
 from transformers import get_linear_schedule_with_warmup
 
-from train.arguments import Arguments
-from train.train import TrainPipeline, compute_metrics
+from .arguments import Arguments
+from .train import TrainPipeline, compute_metrics
 
 
 def run_worker(
