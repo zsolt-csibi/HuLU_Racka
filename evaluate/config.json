@@ -1,16 +1,16 @@
 {
-    "model_name": "Qwen/Qwen3-4B",
-    "tokenizer_name": "Qwen/Qwen3-4B",
+    "model_name": "/project/c_racka1/racka_komondor/runs/eval_hulu_racka/legelo2_step_299999",
+    "tokenizer_name": "/project/c_racka1/racka_komondor/runs/eval_hulu_racka/legelo2_step_299999",
     "train_maxlen": 1024,
     "train_batch": 2,
-    "local_model": false,
-    "model_path": "/project/c_racka1/racka_komondor/runs/legelo_2_week2_resume/step_287999",
+    "local_model": true,
     "eval_style": "standard",
     "precision": "fp16",
     "train_epochs": 2,
     "tasks": [
         "cola"
     ],
+    "results_dir": "/project/c_racka1/racka_komondor/src/eval/HuLU_Racka",
     "gradient_accumulation_steps": 16,
     "use_lora": true,
     "lora_r": 64,

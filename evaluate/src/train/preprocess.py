@@ -2,7 +2,6 @@ import torch
 from datasets import load_dataset
 from transformers import AutoTokenizer
 
-from .train import load_local_tokenizer
 from .arguments import Arguments
 from .constants import (
     CONJUNCTIONS,
@@ -104,14 +103,11 @@ class PreprocessPipeline:
         return preprocess_row
 
     def load_tokenizer(self, arguments: Arguments, task: str):
-        if arguments.local_model:
-            tokenizer = load_local_tokenizer(arguments.tokenizer_name, arguments.train_maxlen)
-            print(f"Loaded local tokenizer from {arguments.model_name}")
-        else:
-            tokenizer = AutoTokenizer.from_pretrained(
-                arguments.tokenizer_name, clean_up_tokenization_spaces=True
-            )
-            print(f"Downloaded tokenizer {arguments.tokenizer_name} from Hugging Face")
+        
+        tokenizer = AutoTokenizer.from_pretrained(
+            arguments.tokenizer_name, clean_up_tokenization_spaces=True
+        )
+        print(f"Downloaded tokenizer {arguments.tokenizer_name} from Hugging Face")
 
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token

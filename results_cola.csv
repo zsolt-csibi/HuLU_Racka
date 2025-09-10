@@ -1,0 +1,2 @@
+task;model_name;train_epochs;train_batch;train_lr;train_maxlen;precision;use_lora;eval_style;avg_val_loss;accuracy;mcc;f1;training_time
+cola;/project/c_racka1/racka_komondor/runs/eval_hulu_racka/legelo2_step_299999;1;2;2e-05;1024;fp16;True;standard;0.5003;0.789010989010989;0.1224749942567938;0.70406343801801;0h:47m:20s

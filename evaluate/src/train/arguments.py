@@ -6,8 +6,8 @@ from pydantic import BaseModel, field_validator, model_validator
 
 class Arguments(BaseModel):
     output_dir: str = "HuluFinetune"
+    results_dir: str = "/project/c_racka1/racka_komondor/src/eval/HuLU_Racka"
     model_name: str
-    model_path: str
     tokenizer_name: Optional[str] = None
     train_epochs: int = 6
     train_batch: int = 8

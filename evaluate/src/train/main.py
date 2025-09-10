@@ -7,6 +7,7 @@ from .arguments import Arguments
 from .fsdp import FSdpPipeline, run_worker
 from .preprocess import PreprocessPipeline
 from .train import TrainPipeline
+import os
 
 logging.basicConfig(
     level=logging.INFO,
@@ -31,7 +32,32 @@ def run_task_standard(task: str, args: Arguments) -> None:
     )
 
     trained_model = pipeline.training()
-    pipeline.create_submission(trained_model)
+    
+    avg_loss, metrics = pipeline.evaluate(trained_model)
+
+    avg_loss = avg_loss.detach().cpu().item()
+    
+    pipeline.append_dict_to_csv(
+        file_path=os.path.join(args.results_dir, f"results_{pipeline.current_task}.csv"),
+        row_dict={
+            "task": pipeline.current_task,
+            "model_name": args.model_name,
+            "train_epochs": args.train_epochs,
+            "train_batch": args.train_batch,
+            "train_lr": args.train_lr,
+            "train_maxlen": args.train_maxlen,
+            "precision": args.precision,
+            "use_lora": args.use_lora,
+            "eval_style": args.eval_style,
+            "avg_val_loss": avg_loss,
+            "accuracy": metrics["accuracy"],
+            "mcc": metrics["mcc"],
+            "f1": metrics["f1"],
+            "training_time": pipeline.training_time
+        }
+    )
+    
+    # pipeline.create_submission(trained_model)
 
 
 def run_task_fsdp(task: str, args: Arguments) -> None:

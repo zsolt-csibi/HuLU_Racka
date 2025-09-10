@@ -1,0 +1,5 @@
+base_model_id: Qwen/Qwen3-4B
+model_path: /project/c_racka1/racka_komondor/runs/legelo_2_week2_resume/step_299999
+tokenizer_path: /project/c_racka1/racka_komondor/data/final/tokenizer/qwen3-4B_hu_from_scratch_extended_32768.json
+max_length: 1024
+output_model_path: /project/c_racka1/racka_komondor/runs/eval_hulu_racka/legelo2_step_299999
