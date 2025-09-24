@@ -1,0 +1,6 @@
+task;model_name;train_epochs;train_batch;train_lr;train_maxlen;precision;use_lora;eval_style;avg_val_loss;accuracy;mcc;f1;training_time
+copa;Qwen/Qwen3-4B;4;1;2e-05;1024;fp16;True;standard;0.7044962048530579;0.54;0.0804321728691476;0.54;0h:29m:57s
+copa;Qwen/Qwen3-4B;4;1;2e-05;1024;fp16;True;standard;0.694568932056427;0.55;0.0983300695920096;0.5484172444980403;0h:30m:2s
+copa;Qwen/Qwen3-4B;4;1;2e-05;1024;fp16;True;standard;0.686417818069458;0.55;0.1000200060020007;0.5500450045004501;0h:29m:54s
+copa;elte-nlp/Racka-4B;4;1;2e-05;1024;fp16;True;standard;0.6965844631195068;0.5;0.0004001600640256;0.5;0h:30m:0s
+copa;Qwen/Qwen3-4B-Base;4;1;2e-05;1024;fp16;True;standard;0.7383311986923218;0.52;0.03961584633853541;0.52;0h:29m:56s
