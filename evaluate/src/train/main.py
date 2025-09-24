@@ -22,9 +22,11 @@ def run_task_standard(task: str, args: Arguments) -> None:
     """
     dataset = PreprocessPipeline().preprocess_dataset(args, task)
 
+
     pipeline = TrainPipeline(
         hulu_args=args, current_task=task, tokenizer_name=args.tokenizer_name
     )
+
     pipeline.set_tokenized_datasets(
         train_dataset=dataset["train"],
         dev_dataset=dataset["validation"],

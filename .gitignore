@@ -57,7 +57,5 @@ venv.bak/
 
 /src/hulu-evaluate/predictions
 
-*/evaluate/config.json
-config.json
-config_racka.json
-config_copa.json
+.env
+.vscode/

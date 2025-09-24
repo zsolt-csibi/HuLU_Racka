@@ -1,0 +1,19 @@
+{
+    "model_name": "elte-nlp/Racka-4B",
+    "tokenizer_name": "elte-nlp/Racka-4B",
+    "train_maxlen": 1024,
+    "train_batch": 1,
+    "local_model": false,
+    "eval_style": "standard",
+    "precision": "fp16",
+    "train_epochs": 4,
+    "tasks": [
+        "copa"
+    ],
+    "results_dir": "/project/c_racka1/racka_komondor/src/eval/HuLU_Racka",
+    "gradient_accumulation_steps": 16,
+    "use_lora": true,
+    "lora_r": 64,
+    "lora_alpha": 128,
+    "lora_dropout": 0.1
+}

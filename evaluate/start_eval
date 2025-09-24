@@ -3,4 +3,14 @@
 source /project/c_racka1/miniconda_install/bin/activate
 conda activate eval_qwen
 
-python3 test_train.py --config-file config.json
+export GPUS_PER_NODE=1
+export HF_HOME="/project/c_racka1/racka_komondor/.cache/huggingface"
+export XDG_CACHE_HOME="/project/c_racka1/racka_komondor/.cache"
+export FSDP_CONFIG="/project/c_racka1/racka_komondor/scripts/racka_config.yaml"
+
+set -a
+source /project/c_racka1/racka_komondor/src/eval/HuLU_Racka/evaluate/.env
+set +a
+
+
+python3 test_train.py --config-file config_copa.json

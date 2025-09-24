@@ -11,6 +11,8 @@ from .constants import (
     RELEVANT_COLUMNS,
     TOKENIZER_PARAMETERS,
 )
+from huggingface_hub import login
+import os
 
 
 class PreprocessPipeline:
@@ -24,7 +26,6 @@ class PreprocessPipeline:
 
         dataset = load_dataset(dataset_name)
         self.tokenizer, self.tokenizer_params = self.load_tokenizer(arguments, task)
-
 
 
         self.preprocess_fn = self.get_preprocess_fn(
@@ -103,6 +104,9 @@ class PreprocessPipeline:
         return preprocess_row
 
     def load_tokenizer(self, arguments: Arguments, task: str):
+        token = os.getenv("HF_TOKEN")
+
+        login(token=token)
         
         tokenizer = AutoTokenizer.from_pretrained(
             arguments.tokenizer_name, clean_up_tokenization_spaces=True

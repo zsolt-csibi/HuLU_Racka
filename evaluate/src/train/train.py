@@ -56,7 +56,7 @@ def compute_metrics(logits, labels):
 class AutoForMultipleChoice(nn.Module):
     def __init__(self, model_name):
         super().__init__()
-        self.model = AutoModel.from_pretrained(model_name, base_model_id,
+        self.model = AutoModel.from_pretrained(model_name,
             attn_implementation="sdpa",
             device_map="auto"
         )
@@ -166,11 +166,12 @@ class TrainPipeline:
         )
         if self.current_task == "copa":
             model = AutoForMultipleChoice(self.hulu_args.model_name)
+            model.model.config.pad_token_id = self.tokenizer.pad_token_id
         else:
             model = AutoModelForSequenceClassification.from_pretrained(
                 self.hulu_args.model_name, **model_kwargs
             )
-        model.config.pad_token_id = self.tokenizer.pad_token_id
+            model.config.pad_token_id = self.tokenizer.pad_token_id
 
         if self.hulu_args.use_lora:
             model = set_lora(self.hulu_args, sequente_classification=False, model=model)
