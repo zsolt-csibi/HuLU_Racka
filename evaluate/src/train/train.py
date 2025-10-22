@@ -1,5 +1,7 @@
+from xml.parsers.expat import model
 import evaluate
 import numpy as np
+import shutil
 import torch
 from torch import amp, nn
 from torch.optim import AdamW
@@ -9,13 +11,30 @@ from transformers import (
     AutoModel,
     AutoModelForSequenceClassification,
     AutoTokenizer,
+    AutoModelForCausalLM,
     get_linear_schedule_with_warmup,
     PreTrainedTokenizerFast,
 )
 
+from .constants import (
+    TOKENIZER_PARAMETERS,
+    CB_PROMPT,
+    WNLI_PROMPT,
+    COPA_PROMPT_EFFECT,
+    COPA_PROMPT_CAUSE,
+    RTE_PROMPT,
+    SST_PROMPT,
+    COLA_PROMPT,
+    INVERSE_CONVERSIONS
+)
+
+import copy
+
 import time
 import pandas as pd
 import os
+import wandb
+import logging
 
 
 
@@ -31,6 +50,7 @@ from .arguments import Arguments
 from .constants import CB_LABELS, CONJUNCTIONS, SST_LABELS
 from .helper import write_submission
 from .lora_helper import set_lora
+import re
 
 accuracy_metric = evaluate.load("accuracy")
 mcc_metric = evaluate.load("matthews_correlation")
@@ -140,20 +160,20 @@ class TrainPipeline:
     def set_tokenized_datasets(self, train_dataset, dev_dataset, test_dataset):
         self.train_loader = DataLoader(
             train_dataset,
-            batch_size=self.hulu_args.train_batch,
+            batch_size=self.hulu_args.train_batch if self.current_task != "copa" else 1,
             shuffle=True,
             collate_fn=self.collate_fn,
         )
         self.dev_loader = DataLoader(
             dev_dataset,
-            batch_size=self.hulu_args.train_batch,
+            batch_size=self.hulu_args.train_batch if self.current_task != "copa" else 1,
             shuffle=False,
             collate_fn=self.collate_fn,
         )
-        test_dataset = test_dataset.remove_columns("label")
+        # test_dataset = test_dataset.remove_columns("label")
         self.test_loader = DataLoader(
             test_dataset,
-            batch_size=self.hulu_args.train_batch,
+            batch_size=self.hulu_args.train_batch if self.current_task != "copa" else 1,
             shuffle=False,
             collate_fn=self.collate_fn,
         )
@@ -228,6 +248,13 @@ class TrainPipeline:
 
         start = time.time()
 
+        run = wandb.init(project="Racka-eval", id=self.hulu_args.wandb_run_id, resume="allow")
+
+        best_eval_loss = float("inf")
+        # patience_counter = 0
+        # patience = getattr(self.hulu_args, "early_stopping_patience", 3)  # default 3 evals
+        temp_model = "./current_best_model.pth"
+
         for epoch in range(self.hulu_args.train_epochs):
             model.train()
             total_loss, correct_preds = 0, 0
@@ -265,33 +292,66 @@ class TrainPipeline:
                 correct_preds += (output.logits.argmax(dim=1) == labels).sum().item()
 
                 if step % num_eval_steps == 0:
-                    eval_loss, metrics = self.evaluate(model)
+                    eval_loss, metrics = self.evaluate(model, self.dev_loader)
                     print(
                         f"Step {step}: Eval Loss = {eval_loss:.4f}, Eval Acc = {metrics['accuracy']}, Eval MCC = {metrics['mcc']}, Eval F1 = {metrics['f1']}"
                     )
-
+                    run.log({
+                        f"{self.current_task}/eval_loss": eval_loss,
+                        f"{self.current_task}/eval_accuracy": metrics["accuracy"],
+                        f"{self.current_task}/eval_mcc": metrics["mcc"],
+                        f"{self.current_task}/eval_f1": metrics["f1"],
+                    })
+                    # Check early stopping
+                    if eval_loss < best_eval_loss:
+                        # Save the best model
+                        print(f"New best model found at step {step} with eval loss {eval_loss:.4f}")
+                        best_eval_loss = eval_loss
+                        torch.save(model.state_dict(), "current_best_model.pth")
+                        
+                        # patience_counter = 0
+                    #     logging.info(f"New best model found at step {step} with eval loss {eval_loss:.4f}")
+                    #     best_eval_loss = eval_loss
+                    #     patience_counter = 0
+                    #     torch.save(model.state_dict(), "current_best_model.pth")
+                
+            # if patience_counter >= patience:
+            #     break
             avg_loss = total_loss / len(self.train_loader)
             accuracy = correct_preds / len(self.train_loader.dataset)
             print(
                 f"Epoch {epoch + 1}: Train Loss = {avg_loss:.4f}, Train Accuracy = {accuracy:.4f}"
             )
-            
+            run.log({
+                f"{self.current_task}/train_loss": avg_loss,
+                f"{self.current_task}/train_accuracy": accuracy,
+                f"{self.current_task}/learning_rate": scheduler.get_last_lr()[0],
+            })
+
         elapsed_time = time.time() - start
+
+        print(f"Best model reloaded from eval with loss {best_eval_loss:.4f}")
+        model.load_state_dict(torch.load("current_best_model.pth", map_location=model.device))
+        # model = AutoModel.from_pretrained(temp_model_path, device_map="auto")
+
+        
+    
+        # torch.save(model.state_dict(), f"/project/c_racka1/racka_komondor/src/eval/HuLU_Racka/saved_models/{self.hulu_args.model_name.replace('/', '-')}_{self.current_task}_lora_finetune_eval_learningrate_{self.hulu_args.train_lr}_scheduler_{self.hulu_args.scheduler_type}_eval_style_{self.hulu_args.eval_style}_warmup_{self.hulu_args.train_warmup}.pth")
+        os.remove("current_best_model.pth")
 
         hours, remainder = divmod(int(elapsed_time), 3600)
         minutes, seconds = divmod(remainder, 60)
         self.training_time = f"{hours}h:{minutes}m:{seconds}s"
 
-
         return model
 
-    def evaluate(self, model):
+    def evaluate(self, model, dataloader):
         model.eval()
         total_loss, correct_preds = 0, 0
         all_preds, all_labels = [], []
 
         with torch.no_grad():
-            for _, batch in enumerate(self.dev_loader):
+            for _, batch in enumerate(dataloader):
                 input_ids, attention_mask, labels = (
                     batch["input_ids"].squeeze(1).to(self.device),
                     batch["attention_mask"].squeeze(1).to(self.device),
@@ -308,7 +368,7 @@ class TrainPipeline:
                 all_preds.append(preds)
                 all_labels.append(labels)
 
-        avg_loss = total_loss / len(self.dev_loader)
+        avg_loss = total_loss / len(dataloader)
 
         all_preds = torch.cat(all_preds)
         all_labels = torch.cat(all_labels)
@@ -351,3 +411,179 @@ class TrainPipeline:
             predictions_data=predictions_data,
             output_dir=self.hulu_args.output_dir,
         )
+
+
+class PromptTrainPipeline(TrainPipeline):
+    def __init__(self, hulu_args: Arguments, current_task: str, tokenizer_name: str):
+        super().__init__(hulu_args, current_task, tokenizer_name)
+        self.tokenizer_params = TOKENIZER_PARAMETERS[current_task]
+        
+            
+    
+    def _load_model_for_inferecence(self):
+        model = AutoModelForCausalLM.from_pretrained(
+            self.hulu_args.model_name,
+            trust_remote_code=True,
+            load_in_8bit=False,
+            torch_dtype=torch.float16 if self.hulu_args.precision == "fp16" else torch.float32,
+        ).to(self.device)
+        
+        return model
+
+
+    def _build_prompt(self, example):
+        
+        if self.current_task == "cola":
+            prompt = COLA_PROMPT.format(text=example["sentence"])
+        elif self.current_task == "sst":
+            prompt = SST_PROMPT.format(text=example["sentence"])
+        elif self.current_task == "rte":
+            prompt = RTE_PROMPT.format(
+                premise=example["premise"], hypothesis=example["hypothesis"]
+            )
+        elif self.current_task == "cb":
+            prompt = CB_PROMPT.format(
+                premise=example["premise"],
+                hypothesis=example["hypothesis"],
+            )
+        elif self.current_task == "wnli":
+            prompt = WNLI_PROMPT.format(
+                sentence1=example["sentence1"], sentence2=example["sentence2"]
+            )
+        elif self.current_task == "copa":
+            if example["question"] == "effect":
+                prompt = COPA_PROMPT_EFFECT.format(
+                    premise=example["premise"],
+                    choice1=example["choice1"],
+                    choice2=example["choice2"],
+                    examples=""
+                )
+            else:
+                prompt = COPA_PROMPT_CAUSE.format(
+                    premise=example["premise"],
+                    choice1=example["choice1"],
+                    choice2=example["choice2"],
+                    examples=""
+                )
+        else:
+            raise ValueError(f"Unknown task: {self.current_task}")
+
+        return prompt
+        
+
+    def collate_fn(self, batch):
+        
+        texts = [self._build_prompt(item) for item in batch]
+        labels = [str(item["label"]) for item in batch]
+
+        inputs = self.tokenizer(
+            texts,
+            truncation=self.tokenizer_params["truncation"],
+            max_length=self.tokenizer_params["max_length"],
+            padding=self.tokenizer_params["padding"],
+            return_tensors="pt",
+            add_special_tokens=self.tokenizer_params.get("add_special_tokens", True),
+        )
+        labels = self.tokenizer(
+            labels,
+            truncation=True,
+            max_length=10,
+            padding="max_length",
+            return_tensors="pt",
+            add_special_tokens=True,
+        )["input_ids"]
+
+        return {"input_ids": inputs["input_ids"], "attention_mask": inputs["attention_mask"], "labels": labels}
+    
+    
+    def set_tokenized_datasets(self, train_dataset, dev_dataset, test_dataset):
+        self.train_loader = DataLoader(
+            train_dataset,
+            batch_size=self.hulu_args.train_batch if self.current_task != "copa" else 1,
+            shuffle=True,
+            collate_fn=self.collate_fn,
+        )
+        self.dev_loader = DataLoader(
+            dev_dataset,
+            batch_size=self.hulu_args.train_batch if self.current_task != "copa" else 1,
+            shuffle=False,
+            collate_fn=self.collate_fn,
+        )
+        # test_dataset = test_dataset.remove_columns("label")
+        self.test_loader = DataLoader(
+            test_dataset,
+            batch_size=self.hulu_args.train_batch if self.current_task != "copa" else 1,
+            shuffle=False,
+            collate_fn=self.collate_fn,
+        )
+
+    def evaluate_generation(self, dataloader):
+        model = self._load_model_for_inferecence()
+        model.eval()
+        all_preds, all_labels = [], []
+        
+        with torch.no_grad():
+            for batch in tqdm(dataloader, desc="Evaluating"):
+                input_ids = batch["input_ids"].to(self.device)
+
+                attention_mask = batch["attention_mask"].to(self.device)
+                labels = batch["labels"].to(self.device)
+                
+                # Generate predictions
+                outputs = model.generate(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    max_new_tokens=5,
+                    do_sample=False,
+                    pad_token_id=self.tokenizer.pad_token_id,
+                    eos_token_id=self.tokenizer.eos_token_id
+                )
+                
+                # Extract generated text (remove input prompt)
+                generated_ids = outputs[:, input_ids.shape[1]:]
+                generated_texts = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
+                # logging.info(f"Generated text: {generated_texts[0]}")
+                
+                # Extract true labels
+                label_texts = self.tokenizer.batch_decode(labels, skip_special_tokens=True)
+                
+                # Convert text predictions to numerical labels
+                for pred_text, true_text in zip(generated_texts, label_texts):
+                    pred_label = self._text_to_label(pred_text.strip())
+                    true_label = self._text_to_label(true_text.strip())
+                    
+                    all_preds.append(pred_label)
+                    all_labels.append(true_label)
+        
+        # Convert to tensors for metric computation
+        
+        logging.info(f"All predictions: {all_preds}")
+        all_preds = torch.tensor(all_preds)
+        all_labels = torch.tensor(all_labels)
+        
+        metrics = compute_metrics(all_preds, all_labels)
+        return metrics, 'na'
+
+    def _text_to_label(self, text):
+        text = text.lower().strip()
+        conversions = INVERSE_CONVERSIONS.get(self.current_task, [])
+        if not conversions:
+            try:
+                return int(text)
+            except ValueError:
+                return text  # return as is if conversion fails
+
+        # build a mapping for quick lookup
+        conversion_dict = {c["from"]: c["to"] for c in conversions}
+
+        cleaned_text = text
+
+        for key, value in conversion_dict.items():
+            # Clean key and text for comparison
+            if key in cleaned_text:
+                cleaned_text = key
+                break
+        
+
+        return conversion_dict.get(cleaned_text, -1)  # return original text if no match
+

@@ -15,6 +15,9 @@ def cli() -> None:
     parser.add_argument(
         "--output-dir", type=str, default="finetune_results", help="Output directory"
     )
+    parser.add_argument(
+        "--repeatable-runs", type=int, default=1, help="Number of repeatable runs"
+    )
     parser.add_argument("--model-name", type=str, help="Model name")
     parser.add_argument(
         "--tokenizer-name", type=str, help="Tokenizer name (defaults to model_name)"

@@ -1,12 +1,11 @@
 {
-    "model_name": "Qwen/Qwen3-4B-Base",
-    "tokenizer_name": "Qwen/Qwen3-4B-Base",
+    "model_name": "elte-nlp/Racka-4B",
+    "tokenizer_name": "elte-nlp/Racka-4B",
     "train_maxlen": 1024,
     "train_batch": 2,
     "local_model": false,
-    "eval_style": "standard",
+    "eval_style": "prompt",
     "precision": "fp16",
-    "repeatable_runs": 10,
     "train_epochs": 10,
     "train_warmup": 1,
     "tasks": [

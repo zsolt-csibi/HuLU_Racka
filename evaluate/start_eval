@@ -1,5 +1,7 @@
 #!/bin/bash
 
+cd /project/c_racka1/racka_komondor/src/eval/HuLU_Racka/evaluate
+
 source /project/c_racka1/miniconda_install/bin/activate
 conda activate eval_qwen
 
@@ -12,5 +14,11 @@ set -a
 source /project/c_racka1/racka_komondor/src/eval/HuLU_Racka/evaluate/.env
 set +a
 
+# Get the number of iterations from the first argument
+n=${1:-1}
 
-python3 test_train.py --config-file config_copa.json
+# Run the python script n times
+for ((i=1; i<=n; i++)); do
+    echo "Running iteration $i of $n"
+    python3 test_train.py --config-file config_racka.json
+done

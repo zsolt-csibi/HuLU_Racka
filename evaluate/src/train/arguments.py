@@ -9,11 +9,13 @@ class Arguments(BaseModel):
     results_dir: str = "/project/c_racka1/racka_komondor/src/eval/HuLU_Racka"
     model_name: str
     tokenizer_name: Optional[str] = None
+    repeatable_runs: int = 1
     train_epochs: int = 6
     train_batch: int = 8
     train_lr: float = 2e-05
     train_warmup: int = 0
     train_maxlen: int = 256
+    scheduler_type: str = "linear"
     train_seed: int = 42
     precision: str = "fp32"
     use_lora: bool = False
@@ -25,6 +27,9 @@ class Arguments(BaseModel):
     tasks: List[str] = ["cola", "rte", "wnli", "cb", "sst", "copa"]
     use_fsdp: bool = False
     gradient_accumulation_steps: int = 1
+    wandb_run_id: Optional[str] = None
+    early_stopping_patience: Optional[int] = None
+    num_fewshot: int = 0
 
     model_config = {"protected_namespaces": ()}
 

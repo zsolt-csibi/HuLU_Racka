@@ -10,16 +10,29 @@ from .constants import (
     LABELS,
     RELEVANT_COLUMNS,
     TOKENIZER_PARAMETERS,
+    CONVERSIONS
 )
 from huggingface_hub import login
 import os
+import logging
 
+logging.basicConfig(level=logging.INFO)
 
 class PreprocessPipeline:
     def __init__(self):
         self.tokenizer = None
         self.tokenizer_params = None
         self.preprocess_fn = None
+
+    def preprocess_data_for_prompting(self, task: str):
+        dataset_name = HULU_DATASETS[task]
+
+        dataset = load_dataset(dataset_name)
+
+        dataset = dataset.map(lambda batch: self._map_labels_for_prompting(batch, task), batched=True, keep_in_memory=True)
+        
+        return dataset
+        
 
     def preprocess_dataset(self, arguments: Arguments, task: str):
         dataset_name = HULU_DATASETS[task]
@@ -31,9 +44,6 @@ class PreprocessPipeline:
         self.preprocess_fn = self.get_preprocess_fn(
             task, self.tokenizer, self.tokenizer_params
         )
-        
-        if arguments.eval_style == "prompting":
-            dataset = dataset.map(lambda batch: self._map_labels_for_prompting(batch, task), batched=True)
 
         remove_columns = IRRELEVANT_COLUMNS.get(task)
 
@@ -41,7 +51,7 @@ class PreprocessPipeline:
 
         return dataset
     
-    def _map_labels_for_prompting(batch, task):
+    def _map_labels_for_prompting(self, batch, task):
         conversions = CONVERSIONS.get(task, [])
         if not conversions:
             return batch  # nothing to change
@@ -50,6 +60,9 @@ class PreprocessPipeline:
         conversion_dict = {c["from"]: c["to"] for c in conversions}
 
         # convert labels
+        logging.info(f"Original labels: {set(batch['label'])}")
+        logging.info(f"Conversion dict: {conversion_dict}")
+        
         batch["label"] = [
             conversion_dict.get(label, label) for label in batch["label"]
         ]
